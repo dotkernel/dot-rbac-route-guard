@@ -1,0 +1,19 @@
+docs_dir: docs/book
+site_dir: docs/html
+extra:
+  project: Packages
+  current_version: v1
+  versions:
+    - v1
+nav:
+  - Home: index.md
+  - v1:
+      - Overview: v1/overview.md
+      - Installation: v1/installation.md
+      - Configuration: v1/configuration.md
+      - "Updating the Pipeline": v1/updating-pipeline.md
+site_name: dot-rbac-route-guard
+site_description: "The RBAC route authorization guards service authorizes users for accessing certain parts of an application based on various criteria"
+repo_url: "https://github.com/dotkernel/dot-rbac-route-guard"
+plugins:
+  - search
