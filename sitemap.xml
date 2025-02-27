@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+    <url>
+         <loc>https://docs.dotkernel.org/dot-rbac-route-guard/</loc>
+         <lastmod>2025-02-27</lastmod>
+    </url>
+    <url>
+         <loc>https://docs.dotkernel.org/dot-rbac-route-guard/v1/configuration/</loc>
+         <lastmod>2025-02-27</lastmod>
+    </url>
+    <url>
+         <loc>https://docs.dotkernel.org/dot-rbac-route-guard/v1/installation/</loc>
+         <lastmod>2025-02-27</lastmod>
+    </url>
+    <url>
+         <loc>https://docs.dotkernel.org/dot-rbac-route-guard/v1/overview/</loc>
+         <lastmod>2025-02-27</lastmod>
+    </url>
+    <url>
+         <loc>https://docs.dotkernel.org/dot-rbac-route-guard/v1/updating-pipeline/</loc>
+         <lastmod>2025-02-27</lastmod>
+    </url>
+</urlset>
