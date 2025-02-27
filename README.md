@@ -21,7 +21,7 @@ Documentation is available at: https://docs.dotkernel.org/dot-rbac-route-guard/.
 [![GitHub license](https://img.shields.io/github/license/dotkernel/dot-rbac-route-guard)](https://github.com/dotkernel/dot-rbac-route-guard/blob/1.0/LICENSE.md)
 
 [![Build Static](https://github.com/dotkernel/dot-rbac-route-guard/actions/workflows/continuous-integration.yml/badge.svg?branch=1.0)](https://github.com/dotkernel/dot-rbac-route-guard/actions/workflows/continuous-integration.yml)
-[![codecov](https://codecov.io/gh/dotkernel/dot-rbac-route-guard/graph/badge.svg?token=XXXXXXXXXX)](https://codecov.io/gh/dotkernel/dot-rbac-route-guard)
+[![codecov](https://codecov.io/gh/dotkernel/dot-rbac-route-guard/graph/badge.svg?token=AINDYNvE5P)](https://codecov.io/gh/dotkernel/dot-rbac-route-guard)
 [![PHPStan](https://github.com/dotkernel/dot-rbac-route-guard/actions/workflows/static-analysis.yml/badge.svg?branch=1.0)](https://github.com/dotkernel/dot-rbac-route-guard/actions/workflows/static-analysis.yml)
 
 ## Installation
