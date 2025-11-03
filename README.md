@@ -2,7 +2,7 @@
 
 `dot-rbac-route-guard` is Dotkernel's RBAC Route guard component.
 
-Defines authorization guards that authorize users for accessing certain parts of an application based on various criteria.
+Defines authorization guards that authorize users to access certain parts of an application based on various criteria.
 If the authorization service can be used to check authorization on a narrow level, the guards are meant to work as gateways to bigger parts of an application.
 Usually, you'll want to use both methods in an application for increased security.
 
@@ -13,20 +13,20 @@ Documentation is available at: https://docs.dotkernel.org/dot-rbac-route-guard/.
 ## Badges
 
 ![OSS Lifecycle](https://img.shields.io/osslifecycle/dotkernel/dot-rbac-route-guard)
-![PHP from Packagist (specify version)](https://img.shields.io/packagist/php-v/dotkernel/dot-rbac-route-guard/1.0.0)
+![PHP from Packagist (specify version)](https://img.shields.io/packagist/php-v/dotkernel/dot-rbac-route-guard/0.2.0)
 
 [![GitHub issues](https://img.shields.io/github/issues/dotkernel/dot-rbac-route-guard)](https://github.com/dotkernel/dot-rbac-route-guard/issues)
 [![GitHub forks](https://img.shields.io/github/forks/dotkernel/dot-rbac-route-guard)](https://github.com/dotkernel/dot-rbac-route-guard/network)
 [![GitHub stars](https://img.shields.io/github/stars/dotkernel/dot-rbac-route-guard)](https://github.com/dotkernel/dot-rbac-route-guard/stargazers)
-[![GitHub license](https://img.shields.io/github/license/dotkernel/dot-rbac-route-guard)](https://github.com/dotkernel/dot-rbac-route-guard/blob/1.0/LICENSE.md)
+[![GitHub license](https://img.shields.io/github/license/dotkernel/dot-rbac-route-guard)](https://github.com/dotkernel/dot-rbac-route-guard/blob/main/LICENSE.md)
 
-[![Build Static](https://github.com/dotkernel/dot-rbac-route-guard/actions/workflows/continuous-integration.yml/badge.svg?branch=1.0)](https://github.com/dotkernel/dot-rbac-route-guard/actions/workflows/continuous-integration.yml)
+[![Build Static](https://github.com/dotkernel/dot-rbac-route-guard/actions/workflows/continuous-integration.yml/badge.svg?branch=main)](https://github.com/dotkernel/dot-rbac-route-guard/actions/workflows/continuous-integration.yml)
 [![codecov](https://codecov.io/gh/dotkernel/dot-rbac-route-guard/graph/badge.svg?token=AINDYNvE5P)](https://codecov.io/gh/dotkernel/dot-rbac-route-guard)
-[![PHPStan](https://github.com/dotkernel/dot-rbac-route-guard/actions/workflows/static-analysis.yml/badge.svg?branch=1.0)](https://github.com/dotkernel/dot-rbac-route-guard/actions/workflows/static-analysis.yml)
+[![PHPStan](https://github.com/dotkernel/dot-rbac-route-guard/actions/workflows/static-analysis.yml/badge.svg?branch=main)](https://github.com/dotkernel/dot-rbac-route-guard/actions/workflows/static-analysis.yml)
 
 ## Installation
 
-Run the following command in your project's root directory:
+Run the following Composer command in your project's root directory:
 
 ```shell
 composer require dotkernel/dot-rbac-route-guard
@@ -38,7 +38,7 @@ You'll have to first configure `dot-rbac` before using this library.
 
 ## Configuration
 
-As with many Dotkernel libraries, we focus on the configuration based approach of customizing the module for your needs.
+As with many Dotkernel libraries, we focus on the configuration-based approach of customizing the module for your needs.
 
 After installing, merge `dot-rbac-route-guard`'s `ConfigProvider` with your application's config to make sure required dependencies and default library configuration are registered.
 Create a configuration file for this library in your 'config/autoload' folder.
@@ -71,8 +71,8 @@ return [
         //register custom guards providers here
         'guards_provider_manager' => [],
 
-        //define which guards provider to use, along with its configuration
-        //the guards provider should know how to build a list of GuardInterfaces based on its configuration
+        //define which guard provider to use, along with its configuration
+        //the guard provider should know how to build a list of GuardInterfaces based on its configuration
         'guards_provider' => [
             'type'    => 'ArrayGuards',
             'options' => [
@@ -116,7 +116,7 @@ return [
 
 ## Register RbacGuardMiddleware in the pipeline
 
-The last step in order to use this package is to register the middleware.
+The last step to use this package is to register the middleware.
 This middleware triggers the authorization event.
 You MUST insert this middleware between the routing middleware and the dispatch middleware of the application, because the guards need the `RouteResult` in order to get the matched route and params.
 
