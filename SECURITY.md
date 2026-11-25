@@ -2,9 +2,10 @@
 
 ## Supported Versions
 
-| Version | Supported          | PHP Version                                                                                                          |
-|---------|--------------------|----------------------------------------------------------------------------------------------------------------------|
-| 1.x     | :white_check_mark: | ![PHP from Packagist (specify version)](https://img.shields.io/packagist/php-v/dotkernel/dot-rbac-route-guard/0.2.0) |
+| Version | Supported | PHP Version |
+| --- | --- | --- |
+| 2.x | :white_check_mark: | ![PHP from Packagist (specify version)](https://img.shields.io/packagist/php-v/dotkernel/dot-rbac-route-guard/2.0.0) |
+| 0.x | :x: | ![PHP from Packagist (specify version)](https://img.shields.io/packagist/php-v/dotkernel/dot-rbac-route-guard/0.2.0) |
 
 ## Reporting Potential Security Issues
 

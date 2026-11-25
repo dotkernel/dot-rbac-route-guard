@@ -11,6 +11,8 @@ use Psr\Container\NotFoundExceptionInterface;
 
 class GuardsProviderPluginManagerFactory
 {
+    use PluginManagerConfigTrait;
+
     /**
      * @throws ContainerExceptionInterface
      * @throws NotFoundExceptionInterface
@@ -19,7 +21,7 @@ class GuardsProviderPluginManagerFactory
     {
         return new GuardsProviderPluginManager(
             $container,
-            $container->get('config')['dot_authorization']['guards_provider_manager'] ?? []
+            $this->getPluginManagerConfig($container, 'guards_provider_manager')
         );
     }
 }

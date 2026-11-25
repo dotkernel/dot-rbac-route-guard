@@ -4,145 +4,94 @@ declare(strict_types=1);
 
 namespace DotTest\Rbac\Route\Guard\Guard;
 
-use Dot\Rbac\Role\RoleServiceInterface;
+use Dot\Rbac\Route\Guard\Exception\InvalidArgumentException;
+use Dot\Rbac\Route\Guard\Exception\RuntimeException;
+use Dot\Rbac\Route\Guard\Guard\GuardInterface;
 use Dot\Rbac\Route\Guard\Guard\RouteGuard;
-use Laminas\Diactoros\ServerRequest;
-use Mezzio\Router\RouteResult;
-use PHPUnit\Framework\MockObject\Exception;
+use DotTest\Rbac\Route\Guard\Fixture\Request;
+use DotTest\Rbac\Route\Guard\Fixture\RoleService;
 use PHPUnit\Framework\TestCase;
 
 class RouteGuardTest extends TestCase
 {
-    protected RouteGuard $subject;
-
-    protected RoleServiceInterface $mockRoleServiceClass;
-
-    protected array $rules = [
-        'actions' => [
-            'avatar',
-            'details',
-            'changePassword',
-            'deleteAccount',
-            'index',
-        ],
-        'test'    => ['*'],
-    ];
-
-    public function setUp(): void
+    /**
+     * @param array<array-key, mixed> $rules
+     */
+    private function guard(array $rules = [], string $policy = GuardInterface::POLICY_DENY): RouteGuard
     {
-        $this->mockRoleServiceClass = new class implements RoleServiceInterface {
-            public function getIdentity(): ?string
-            {
-                return null;
-            }
+        return new RouteGuard([
+            'role_service'      => new RoleService(['user']),
+            'protection_policy' => $policy,
+            'rules'             => $rules,
+        ]);
+    }
 
-            public function getGuestRole(): string
-            {
-                return 'role';
-            }
+    public function testConstructorRequiresRoleService(): void
+    {
+        $this->expectException(RuntimeException::class);
+        $this->expectExceptionMessage('RoleService is required by this guard and was not set');
+        new RouteGuard();
+    }
 
-            public function getIdentityRoles(): array
-            {
-                return [];
-            }
+    public function testConstructorRejectsInvalidProtectionPolicy(): void
+    {
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage('Protection policy must be "allow" or "deny", "ALLOW" given');
+        new RouteGuard(['role_service' => new RoleService(), 'protection_policy' => 'ALLOW']);
+    }
 
-            public function matchIdentityRoles(array $roles): bool
-            {
-                return true;
-            }
-        };
+    public function testDefaultsAndAccessors(): void
+    {
+        $roleService = new RoleService();
+        $subject     = new RouteGuard(['role_service' => $roleService]);
 
-        $this->subject = new RouteGuard(
-            [
-                'protection_policy' => 'somePolicy',
-                'role_service'      => $this->mockRoleServiceClass,
-            ]
+        $this->assertSame(GuardInterface::POLICY_DENY, $subject->getProtectionPolicy());
+        $this->assertSame($roleService, $subject->getRoleService());
+        $this->assertSame(RouteGuard::PRIORITY, $subject->getPriority());
+
+        $other = new RoleService();
+        $subject->setRoleService($other);
+        $this->assertSame($other, $subject->getRoleService());
+    }
+
+    public function testSetRulesNormalizesRouteNames(): void
+    {
+        $subject = $this->guard(['Home' => 'user', 'Login', 'Account' => ['admin', 'user'], 10 => ['ignored']]);
+
+        $this->assertSame(
+            ['home' => ['user'], 'login' => [], 'account' => ['admin', 'user']],
+            $subject->getRules()
         );
     }
 
-    public function testSetRules(): void
+    public function testUnmatchedRequestUsesProtectionPolicy(): void
     {
-        $this->subject->setRules($this->rules);
-        $this->assertIsArray($this->subject->getRules());
+        $this->assertFalse($this->guard()->isGranted(Request::withoutRoute()));
+        $this->assertFalse($this->guard()->isGranted(Request::forFailedRoute()));
+        $this->assertTrue($this->guard([], GuardInterface::POLICY_ALLOW)->isGranted(Request::withoutRoute()));
     }
 
-    public function testSetRoleService(): void
+    public function testRouteWithoutRuleUsesProtectionPolicy(): void
     {
-        $this->subject->setRoleService($this->mockRoleServiceClass);
-        $result = $this->subject->getRoleService();
-        $this->assertInstanceOf(RoleServiceInterface::class, $result);
+        $this->assertFalse($this->guard(['home' => ['user']])->isGranted(Request::forRoute('other')));
+        $this->assertTrue(
+            $this->guard(['home' => ['user']], GuardInterface::POLICY_ALLOW)->isGranted(Request::forRoute('other'))
+        );
     }
 
-    /**
-     * @throws Exception
-     */
-    public function testIsNotGrantedRulesNotSet(): void
+    public function testWildcardGrantsEveryone(): void
     {
-        $request = $this->createMock(ServerRequest::class);
-
-        $result = $this->subject->isGranted($request);
-        $this->assertFalse($result);
+        $this->assertTrue($this->guard(['home' => ['*']])->isGranted(Request::forRoute('home')));
     }
 
-    /**
-     * @throws Exception
-     */
-    public function testIsNotGrantedNullAllowedRoles(): void
+    public function testMatchesRolesCaseInsensitiveRouteName(): void
     {
-        $request     = $this->createMock(ServerRequest::class);
-        $routeResult = $this->createMock(RouteResult::class);
-
-        $request->expects($this->once())
-            ->method('getAttribute')
-            ->with(RouteResult::class)
-            ->willReturn($routeResult);
-        $routeResult->expects($this->atLeastOnce())
-            ->method('getMatchedRouteName')
-            ->willReturn('testRoute');
-
-        $result = $this->subject->isGranted($request);
-        $this->assertFalse($result);
+        $this->assertTrue($this->guard(['Account' => ['user']])->isGranted(Request::forRoute('account')));
+        $this->assertFalse($this->guard(['account' => ['admin']])->isGranted(Request::forRoute('ACCOUNT')));
     }
 
-    /**
-     * @throws Exception
-     */
-    public function testIsGrantedEverything(): void
+    public function testRouteListedWithoutRolesDeniesAccess(): void
     {
-        $request     = $this->createMock(ServerRequest::class);
-        $routeResult = $this->createMock(RouteResult::class);
-
-        $request->expects($this->once())
-            ->method('getAttribute')
-            ->with(RouteResult::class)
-            ->willReturn($routeResult);
-        $routeResult->expects($this->atLeastOnce())
-            ->method('getMatchedRouteName')
-            ->willReturn('test');
-
-        $this->subject->setRules($this->rules);
-        $result = $this->subject->isGranted($request);
-        $this->assertTrue($result);
-    }
-
-    /**
-     * @throws Exception
-     */
-    public function testIsGranted(): void
-    {
-        $request     = $this->createMock(ServerRequest::class);
-        $routeResult = $this->createMock(RouteResult::class);
-
-        $request->expects($this->once())
-            ->method('getAttribute')
-            ->with(RouteResult::class)
-            ->willReturn($routeResult);
-        $routeResult->expects($this->atLeastOnce())
-            ->method('getMatchedRouteName')
-            ->willReturn('actions');
-
-        $this->subject->setRules($this->rules);
-        $result = $this->subject->isGranted($request);
-        $this->assertTrue($result);
+        $this->assertFalse($this->guard(['home'], GuardInterface::POLICY_ALLOW)->isGranted(Request::forRoute('home')));
     }
 }

@@ -9,16 +9,16 @@ return [
         //define how it will treat non-matching guard rules, allow all by default
         'protection_policy' => GuardInterface::POLICY_ALLOW,
         'event_listeners'   => [
-            [
-                'type'     => 'class or service name of the listener',
-                'priority' => 1,
-            ],
+            //[
+            //    'type'     => 'class or service name of the listener',
+            //    'priority' => 1,
+            //],
         ],
 
-        //define custom guards here
+        //define custom guards here, with "factories" and "aliases"
         'guard_manager' => [],
 
-        //register custom guards providers here
+        //register custom guards providers here, with "factories" and "aliases"
         'guards_provider_manager' => [],
 
         //define which guards provider to use, along with its configuration
@@ -42,6 +42,9 @@ return [
                     [
                         'type'    => 'RoutePermission',
                         'options' => [
+                            //optional: the policy for routes that this guard does not list
+                            //every guard must grant access, so "allow" makes this guard ignore unlisted routes
+                            //'protection_policy' => GuardInterface::POLICY_ALLOW,
                             'rules' => [
                                 'premium' => ['premium'],
                                 'account' => ['my-account'],

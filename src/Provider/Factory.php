@@ -5,40 +5,38 @@ declare(strict_types=1);
 namespace Dot\Rbac\Route\Guard\Provider;
 
 use Dot\Rbac\Route\Guard\Exception\RuntimeException;
-use Psr\Container\ContainerExceptionInterface;
 use Psr\Container\ContainerInterface;
+
+use function is_array;
+use function is_string;
 
 class Factory
 {
-    protected ContainerInterface $container;
-
-    protected ?GuardsProviderPluginManager $guardsProviderPluginManager;
-
     public function __construct(
-        ContainerInterface $container,
-        ?GuardsProviderPluginManager $guardsProviderPluginManager = null
+        protected ContainerInterface $container,
+        protected ?GuardsProviderPluginManager $guardsProviderPluginManager = null
     ) {
-        $this->container                   = $container;
-        $this->guardsProviderPluginManager = $guardsProviderPluginManager;
     }
 
     /**
-     * @throws ContainerExceptionInterface
+     * @param array<array-key, mixed> $specs
      */
     public function create(array $specs): GuardsProviderInterface
     {
         $type = $specs['type'] ?? '';
-        if (empty($type)) {
+        if (! is_string($type) || $type === '') {
             throw new RuntimeException('Guard provider type was not specified');
         }
 
-        return $this->getGuardsProviderPluginManager()->build($type, $specs['options'] ?? null);
+        $options = $specs['options'] ?? null;
+
+        return $this->getGuardsProviderPluginManager()->build($type, is_array($options) ? $options : null);
     }
 
     public function getGuardsProviderPluginManager(): GuardsProviderPluginManager
     {
-        if (! $this->guardsProviderPluginManager) {
-            $this->guardsProviderPluginManager = new GuardsProviderPluginManager($this->container, []);
+        if ($this->guardsProviderPluginManager === null) {
+            $this->guardsProviderPluginManager = new GuardsProviderPluginManager($this->container);
         }
 
         return $this->guardsProviderPluginManager;

@@ -4,13 +4,10 @@ declare(strict_types=1);
 
 namespace Dot\Rbac\Route\Guard\Event;
 
-use ArrayAccess;
 use Dot\Event\Event;
 
 /**
- * @template TTarget of object|string|null
- * @template TParams of array|ArrayAccess|object
- * @extends Event<TTarget, TParams>
+ * @extends Event<object|string|null, array<string, mixed>>
  */
 class AuthorizationEvent extends Event
 {

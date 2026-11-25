@@ -1,19 +1,29 @@
 # dot-rbac-route-guard
 
-`dot-rbac-route-guard` is Dotkernel's RBAC Route guard component.
+`dot-rbac-route-guard` is Dotkernel's RBAC route guard component.
 
-Defines authorization guards that authorize users to access certain parts of an application based on various criteria.
-If the authorization service can be used to check authorization on a narrow level, the guards are meant to work as gateways to bigger parts of an application.
-Usually, you'll want to use both methods in an application for increased security.
+The package gives authorization guards that control access to the routes of a Mezzio application.
+The authorization service of `dotkernel/dot-rbac` checks permissions at a narrow level, for example in a handler.
+The guards work as gateways to larger parts of an application, before the handler runs.
+Use both methods together for better security.
 
 ## Documentation
 
 Documentation is available at: https://docs.dotkernel.org/dot-rbac-route-guard/.
 
+## Versions
+
+| Version | Supported | PHP version |
+| --- | --- | --- |
+| 2.x | :white_check_mark: | ![PHP from Packagist (specify version)](https://img.shields.io/packagist/php-v/dotkernel/dot-rbac-route-guard/2.0.0) |
+| 0.x | :x: | ![PHP from Packagist (specify version)](https://img.shields.io/packagist/php-v/dotkernel/dot-rbac-route-guard/0.2.0) |
+
+There is no 1.x release. To upgrade from 0.x, read the [upgrade guide](https://docs.dotkernel.org/dot-rbac-route-guard/v2/upgrading/).
+
 ## Badges
 
 ![OSS Lifecycle](https://img.shields.io/osslifecycle/dotkernel/dot-rbac-route-guard)
-![PHP from Packagist (specify version)](https://img.shields.io/packagist/php-v/dotkernel/dot-rbac-route-guard/0.2.0)
+![PHP from Packagist (specify version)](https://img.shields.io/packagist/php-v/dotkernel/dot-rbac-route-guard/2.0.0)
 
 [![GitHub issues](https://img.shields.io/github/issues/dotkernel/dot-rbac-route-guard)](https://github.com/dotkernel/dot-rbac-route-guard/issues)
 [![GitHub forks](https://img.shields.io/github/forks/dotkernel/dot-rbac-route-guard)](https://github.com/dotkernel/dot-rbac-route-guard/network)
@@ -26,26 +36,24 @@ Documentation is available at: https://docs.dotkernel.org/dot-rbac-route-guard/.
 
 ## Installation
 
-Run the following Composer command in your project's root directory:
+Run this command in the root directory of your project:
 
 ```shell
 composer require dotkernel/dot-rbac-route-guard
 ```
 
-Please note that this library is built around the authorization service defined in `dotkernel/dot-rbac`.
-Running the above command will also install that library.
-You'll have to first configure `dot-rbac` before using this library.
+The package is built on the authorization service of `dotkernel/dot-rbac`. Composer also installs that package.
+Configure `dot-rbac` before you use this package.
+
+The package works with any PSR-11 container that accepts a factory for each service key.
+It does not require `laminas/laminas-servicemanager`. If your application uses it, require it in your application.
 
 ## Configuration
 
-As with many Dotkernel libraries, we focus on the configuration-based approach of customizing the module for your needs.
+Add `Dot\Rbac\Route\Guard\ConfigProvider::class` to the `ConfigAggregator` of your application.
+Then copy `authorization-guards.global.php.dist` to `config/autoload/authorization-guards.global.php` and change the rules.
 
-After installing, merge `dot-rbac-route-guard`'s `ConfigProvider` with your application's config to make sure required dependencies and default library configuration are registered.
-Create a configuration file for this library in your 'config/autoload' folder.
-
-### authorization-guards.global.php
-
-You can copy the below code or use the existing `authorization-guards.global.php.dist` to create your version of `authorization-guards.global.php`.
+A short example:
 
 ```php
 <?php
@@ -56,24 +64,8 @@ use Dot\Rbac\Route\Guard\Guard\GuardInterface;
 
 return [
     'dot_authorization' => [
-        //define how it will treat non-matching guard rules, allow all by default
-        'protection_policy' => \Dot\Rbac\Route\Guard\Guard\GuardInterface::POLICY_ALLOW,
-        'event_listeners'   => [
-            [
-                'type'     => 'class or service name of the listener',
-                'priority' => 1,
-            ],
-        ],
-
-        //define custom guards here
-        'guard_manager' => [],
-
-        //register custom guards providers here
-        'guards_provider_manager' => [],
-
-        //define which guard provider to use, along with its configuration
-        //the guard provider should know how to build a list of GuardInterfaces based on its configuration
-        'guards_provider' => [
+        'protection_policy' => GuardInterface::POLICY_ALLOW,
+        'guards_provider'   => [
             'type'    => 'ArrayGuards',
             'options' => [
                 'guards' => [
@@ -81,9 +73,6 @@ return [
                         'type'    => 'Route',
                         'options' => [
                             'rules' => [
-                                'premium' => ['admin'],
-                                'login'   => ['guest'],
-                                'logout'  => ['admin', 'user', 'viewer'],
                                 'account' => ['admin', 'user'],
                                 'home'    => ['*'],
                             ],
@@ -93,52 +82,35 @@ return [
                         'type'    => 'RoutePermission',
                         'options' => [
                             'rules' => [
-                                'premium' => ['premium'],
                                 'account' => ['my-account'],
-                                'logout'  => ['only-logged'],
                             ],
                         ],
                     ],
                 ],
             ],
         ],
-
-        //overwrite default messages
-        'messages_options' => [
-            'messages' => [
-                //MessagesOptions::UNAUTHORIZED => 'You must sign in first to access the requested content',
-                //MessagesOptions::FORBIDDEN => 'You don\'t have enough permissions to access the requested content',
-            ],
-        ],
     ],
 ];
 ```
 
-## Register RbacGuardMiddleware in the pipeline
+A request continues only when every guard grants access.
+The [configuration page](https://docs.dotkernel.org/dot-rbac-route-guard/v2/configuration/) explains all keys and rule formats.
 
-The last step to use this package is to register the middleware.
-This middleware triggers the authorization event.
-You MUST insert this middleware between the routing middleware and the dispatch middleware of the application, because the guards need the `RouteResult` in order to get the matched route and params.
+## Register the middleware in the pipeline
 
-### middleware-pipeline.global.php
+Add `ForbiddenHandler` and `RbacGuardMiddleware` to `config/pipeline.php`, after `RouteMiddleware` and before `DispatchMiddleware`.
+The guards need the `RouteResult` that `RouteMiddleware` adds to the request.
 
 ```php
-//...
+use Dot\Rbac\Route\Guard\Middleware\ForbiddenHandler;
+use Dot\Rbac\Route\Guard\Middleware\RbacGuardMiddleware;
+use Mezzio\Router\Middleware\DispatchMiddleware;
+use Mezzio\Router\Middleware\RouteMiddleware;
 
-'routing' => [
-    'middleware' => [
-        ApplicationFactory::ROUTING_MIDDLEWARE,
-
-        //...
-
-        \Dot\Rbac\Guard\Middleware\RbacGuardMiddleware::class,
-
-        //...
-
-        ApplicationFactory::DISPATCH_MIDDLEWARE,
-    ],
-    'priority' => 1,
-],
-
-//...
+$app->pipe(RouteMiddleware::class);
+// ...
+$app->pipe(ForbiddenHandler::class);
+$app->pipe(RbacGuardMiddleware::class);
+// ...
+$app->pipe(DispatchMiddleware::class);
 ```
