@@ -5,14 +5,17 @@ declare(strict_types=1);
 namespace Dot\Rbac\Route\Guard\Factory;
 
 use Dot\Authorization\AuthorizationInterface;
+use Dot\Rbac\Route\Guard\Exception\RuntimeException;
 use Dot\Rbac\Route\Guard\Middleware\ForbiddenHandler;
-use Dot\Rbac\Route\Guard\Options\RbacGuardOptions;
 use Mezzio\Template\TemplateRendererInterface;
 use Psr\Container\ContainerExceptionInterface;
 use Psr\Container\ContainerInterface;
 use Psr\Container\NotFoundExceptionInterface;
 
-use function is_bool;
+use function is_a;
+use function is_array;
+use function is_string;
+use function sprintf;
 
 class ForbiddenHandlerFactory
 {
@@ -22,22 +25,36 @@ class ForbiddenHandlerFactory
      * @throws ContainerExceptionInterface
      * @throws NotFoundExceptionInterface
      */
-    public function __invoke(ContainerInterface $container, string $requestedName): ForbiddenHandler
-    {
-        $config = $container->get('config');
-        $debug  = is_bool($config['debug']) && $config['debug'];
+    public function __invoke(
+        ContainerInterface $container,
+        string $requestedName = ForbiddenHandler::class
+    ): ForbiddenHandler {
+        if (! is_a($requestedName, ForbiddenHandler::class, true)) {
+            throw new RuntimeException(sprintf('%s can only create %s', self::class, ForbiddenHandler::class));
+        }
+
+        $config = $container->has('config') ? $container->get('config') : [];
+        $config = is_array($config) ? $config : [];
+        $debug  = ($config['debug'] ?? false) === true;
+
+        $template = $config['mezzio']['error_handler']['template_403'] ?? null;
+        $template = is_string($template) ? $template : ForbiddenHandler::TEMPLATE_DEFAULT;
 
         $authorizationService = $container->get(AuthorizationInterface::class);
-        $moduleOptions        = $container->get(RbacGuardOptions::class);
-
-        $template = $config['mezzio']['error_handler']['template_403'] ?? ForbiddenHandler::TEMPLATE_DEFAULT;
+        if (! $authorizationService instanceof AuthorizationInterface) {
+            throw new RuntimeException(sprintf('Service %s is not configured', AuthorizationInterface::class));
+        }
 
         $renderer = $container->has(TemplateRendererInterface::class)
             ? $container->get(TemplateRendererInterface::class)
             : null;
 
-        /** @var ForbiddenHandler $handler */
-        $handler = new $requestedName($authorizationService, $moduleOptions, $renderer, $template);
+        $handler = new $requestedName(
+            $authorizationService,
+            $this->getRbacGuardOptions($container),
+            $renderer instanceof TemplateRendererInterface ? $renderer : null,
+            $template
+        );
         $handler->setDebug($debug);
         $handler->attach($handler->getEventManager(), 1000);
 

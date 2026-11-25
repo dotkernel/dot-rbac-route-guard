@@ -6,59 +6,60 @@ namespace DotTest\Rbac\Route\Guard\Factory;
 
 use Dot\Rbac\Route\Guard\Exception\RuntimeException;
 use Dot\Rbac\Route\Guard\Factory\GuardsProviderFactory;
+use Dot\Rbac\Route\Guard\Guard\Factory;
 use Dot\Rbac\Route\Guard\Guard\GuardPluginManager;
 use Dot\Rbac\Route\Guard\Provider\ArrayGuardsProvider;
-use PHPUnit\Framework\MockObject\Exception;
+use DotTest\Rbac\Route\Guard\Fixture\InMemoryContainer;
 use PHPUnit\Framework\TestCase;
-use Psr\Container\ContainerExceptionInterface;
-use Psr\Container\ContainerInterface;
-use Psr\Container\NotFoundExceptionInterface;
 
 class GuardsProviderFactoryTest extends TestCase
 {
-    /**
-     * @throws Exception
-     * @throws ContainerExceptionInterface
-     * @throws NotFoundExceptionInterface
-     */
-    public function testWillNotCreateWithoutGuardFactory(): void
+    public function testUsesGuardPluginManagerFromContainer(): void
     {
-        $container     = $this->createMock(ContainerInterface::class);
-        $options       = [
-            'guard_factory' => 'stringTest',
-        ];
-        $requestedName = ArrayGuardsProvider::class;
+        $container     = new InMemoryContainer();
+        $pluginManager = new GuardPluginManager($container);
+        $container->set(GuardPluginManager::class, $pluginManager);
 
-        $container->expects($this->once())
-            ->method('get')
-            ->with($options['guard_factory'])
-            ->willReturn(false);
-        $container->expects($this->once())
-            ->method('has')
-            ->with($options['guard_factory'])
-            ->willReturn(true);
+        $provider = (new GuardsProviderFactory())($container, ArrayGuardsProvider::class, ['guards' => []]);
+
+        $this->assertInstanceOf(ArrayGuardsProvider::class, $provider);
+        $this->assertSame($pluginManager, $provider->getGuardFactory()->getGuardPluginManager());
+    }
+
+    public function testWorksWithoutGuardPluginManagerInContainer(): void
+    {
+        $provider = (new GuardsProviderFactory())(new InMemoryContainer(), ArrayGuardsProvider::class);
+
+        $this->assertInstanceOf(ArrayGuardsProvider::class, $provider);
+    }
+
+    public function testUsesNamedGuardFactory(): void
+    {
+        $container    = new InMemoryContainer();
+        $guardFactory = new Factory($container);
+        $container->set('custom.factory', $guardFactory);
+
+        $provider = (new GuardsProviderFactory())($container, ArrayGuardsProvider::class, [
+            'guard_factory' => 'custom.factory',
+        ]);
+
+        $this->assertInstanceOf(ArrayGuardsProvider::class, $provider);
+        $this->assertSame($guardFactory, $provider->getGuardFactory());
+    }
+
+    public function testNamedServiceThatIsNotAGuardFactoryThrows(): void
+    {
+        $container = new InMemoryContainer(['stringTest' => false]);
 
         $this->expectException(RuntimeException::class);
         $this->expectExceptionMessage('Guard factory is required and was not set');
-        (new GuardsProviderFactory())($container, $requestedName, $options);
+        (new GuardsProviderFactory())($container, ArrayGuardsProvider::class, ['guard_factory' => 'stringTest']);
     }
 
-    /**
-     * @throws ContainerExceptionInterface
-     * @throws Exception
-     * @throws NotFoundExceptionInterface
-     */
-    public function testCanCreateService(): void
+    public function testUnknownClassThrows(): void
     {
-        $container     = $this->createMock(ContainerInterface::class);
-        $requestedName = ArrayGuardsProvider::class;
-
-        $container->expects($this->once())
-            ->method('get')
-            ->with(GuardPluginManager::class)
-            ->willReturn(new GuardPluginManager($container));
-
-        $service = (new GuardsProviderFactory())($container, $requestedName);
-        $this->assertInstanceOf(ArrayGuardsProvider::class, $service);
+        $this->expectException(RuntimeException::class);
+        $this->expectExceptionMessage('Guards provider class "Unknown\Provider" does not exist');
+        (new GuardsProviderFactory())(new InMemoryContainer(), 'Unknown\Provider');
     }
 }

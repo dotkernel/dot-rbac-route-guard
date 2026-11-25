@@ -28,24 +28,12 @@ class RbacGuardMiddleware implements MiddlewareInterface, AuthorizationEventList
     use AuthorizationEventListenerTrait;
     use DispatchAuthorizationEventTrait;
 
-    protected AuthorizationInterface $authorizationService;
-
-    protected RbacGuardOptions $options;
-
-    protected GuardsProviderInterface $guardsProvider;
-
-    protected ?AuthenticationInterface $authentication;
-
     public function __construct(
-        AuthorizationInterface $authorizationService,
-        GuardsProviderInterface $guardsProvider,
-        RbacGuardOptions $options,
-        ?AuthenticationInterface $authentication = null
+        protected AuthorizationInterface $authorizationService,
+        protected GuardsProviderInterface $guardsProvider,
+        protected RbacGuardOptions $options,
+        protected ?AuthenticationInterface $authentication = null
     ) {
-        $this->authorizationService = $authorizationService;
-        $this->guardsProvider       = $guardsProvider;
-        $this->options              = $options;
-        $this->authentication       = $authentication;
     }
 
     /**
@@ -62,58 +50,68 @@ class RbacGuardMiddleware implements MiddlewareInterface, AuthorizationEventList
             return $event;
         }
 
-        $request     = $event->getParam('request');
-        $routeResult = $request->getAttribute(RouteResult::class, null);
-        if ($routeResult instanceof RouteResult) {
-            $guards = $this->guardsProvider->getGuards();
+        $request = $this->getRequest($event, $request);
+        $event->setParam('authorized', $this->isGranted($request));
 
-            //iterate over guards, which are sorted by priority
-            //break on the first one that does not grant access
-
-            $isGranted = $this->options->getProtectionPolicy() === GuardInterface::POLICY_ALLOW;
-            foreach ($guards as $guard) {
-                if (! $guard instanceof GuardInterface) {
-                    throw new RuntimeException("Guard is not an instance of " . GuardInterface::class);
-                }
-
-                //according to the policy, we whitelist or blacklist matched routes
-                $r = $guard->isGranted($request);
-                if ($r !== $isGranted) {
-                    $isGranted = $r;
-                    break;
-                }
-            }
-            $event->setParam('authorized', $isGranted);
-        } else {
-            $event->setParam('authorized', true);
-        }
-
-        $params = $event->getParams();
-        $event  = $this->dispatchEvent(AuthorizationEvent::EVENT_AFTER_AUTHORIZATION, $params);
+        $event = $this->dispatchEvent(AuthorizationEvent::EVENT_AFTER_AUTHORIZATION, $event->getParams());
         if ($event instanceof ResponseInterface) {
             return $event;
         }
 
-        $request   = $event->getParam('request');
-        $isGranted = $event->getParam('authorized', true);
-        if (! $isGranted) {
-            if ($this->authentication) {
-                //we throw a 401 if is guest, and let unauthorized exception handlers process it
-                //403 otherwise, resulting in a final handler or redirect, whatever you register as the error handler
-                if (! $this->authentication->hasIdentity()) {
-                    throw new UnauthorizedException(
-                        $this->options->getMessagesOptions()->getMessage(MessagesOptions::UNAUTHORIZED),
-                        401
-                    );
-                }
-            }
+        $request = $this->getRequest($event, $request);
+        if ($event->getParam('authorized', true) !== false) {
+            return $handler->handle($request);
+        }
 
-            throw new ForbiddenException(
-                $this->options->getMessagesOptions()->getMessage(MessagesOptions::FORBIDDEN),
-                403
+        // A guest gets 401, so an unauthorized handler can process it. An identity gets 403.
+        if ($this->authentication !== null && ! $this->authentication->hasIdentity()) {
+            throw new UnauthorizedException(
+                $this->options->getMessagesOptions()->getMessage(MessagesOptions::UNAUTHORIZED),
+                401
             );
         }
 
-        return $handler->handle($request);
+        throw new ForbiddenException(
+            $this->options->getMessagesOptions()->getMessage(MessagesOptions::FORBIDDEN),
+            403
+        );
+    }
+
+    /**
+     * Grants access only when every guard grants it. Each guard applies its protection policy to unknown routes.
+     * Without guards, the global protection policy decides.
+     */
+    protected function isGranted(ServerRequestInterface $request): bool
+    {
+        if (! $request->getAttribute(RouteResult::class) instanceof RouteResult) {
+            return true;
+        }
+
+        $guards = $this->guardsProvider->getGuards();
+        if ($guards === []) {
+            return $this->options->getProtectionPolicy() === GuardInterface::POLICY_ALLOW;
+        }
+
+        foreach ($guards as $guard) {
+            if (! $guard instanceof GuardInterface) {
+                throw new RuntimeException('Guard is not an instance of ' . GuardInterface::class);
+            }
+
+            if (! $guard->isGranted($request)) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /**
+     * Returns the request from the event, because a listener can replace it.
+     */
+    private function getRequest(AuthorizationEvent $event, ServerRequestInterface $default): ServerRequestInterface
+    {
+        $request = $event->getParam('request');
+
+        return $request instanceof ServerRequestInterface ? $request : $default;
     }
 }

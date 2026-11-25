@@ -5,6 +5,12 @@ declare(strict_types=1);
 namespace DotTest\Rbac\Route\Guard;
 
 use Dot\Rbac\Route\Guard\ConfigProvider;
+use Dot\Rbac\Route\Guard\Factory\ForbiddenHandlerFactory;
+use Dot\Rbac\Route\Guard\Factory\GuardPluginManagerFactory;
+use Dot\Rbac\Route\Guard\Factory\GuardsProviderPluginManagerFactory;
+use Dot\Rbac\Route\Guard\Factory\RbacGuardMiddlewareFactory;
+use Dot\Rbac\Route\Guard\Factory\RbacGuardOptionsFactory;
+use Dot\Rbac\Route\Guard\Guard\GuardInterface;
 use Dot\Rbac\Route\Guard\Guard\GuardPluginManager;
 use Dot\Rbac\Route\Guard\Middleware\ForbiddenHandler;
 use Dot\Rbac\Route\Guard\Middleware\RbacGuardMiddleware;
@@ -14,41 +20,33 @@ use PHPUnit\Framework\TestCase;
 
 class ConfigProviderTest extends TestCase
 {
-    protected array $config;
-
-    protected function setup(): void
+    public function testRegistersFactoriesOnly(): void
     {
-        $this->config = (new ConfigProvider())();
+        $this->assertSame(
+            [
+                'factories' => [
+                    GuardPluginManager::class          => GuardPluginManagerFactory::class,
+                    GuardsProviderPluginManager::class => GuardsProviderPluginManagerFactory::class,
+                    RbacGuardOptions::class            => RbacGuardOptionsFactory::class,
+                    RbacGuardMiddleware::class         => RbacGuardMiddlewareFactory::class,
+                    ForbiddenHandler::class            => ForbiddenHandlerFactory::class,
+                ],
+            ],
+            (new ConfigProvider())()['dependencies']
+        );
     }
 
-    public function testHasDependencies(): void
+    public function testDefaultAuthorizationConfig(): void
     {
-        $this->assertArrayHasKey('dependencies', $this->config);
-    }
-
-    public function testHasDotAuthorization(): void
-    {
-        $this->assertArrayHasKey('dot_authorization', $this->config);
-    }
-
-    public function testDependenciesHasFactories(): void
-    {
-        $factories = $this->config['dependencies']['factories'];
-        $this->assertArrayHasKey('factories', $this->config['dependencies']);
-        $this->assertArrayHasKey(GuardPluginManager::class, $factories);
-        $this->assertArrayHasKey(GuardsProviderPluginManager::class, $factories);
-        $this->assertArrayHasKey(RbacGuardOptions::class, $factories);
-        $this->assertArrayHasKey(RbacGuardMiddleware::class, $factories);
-        $this->assertArrayHasKey(ForbiddenHandler::class, $factories);
-    }
-
-    public function testDotAuthorizationHasConfig(): void
-    {
-        $config = $this->config['dot_authorization'];
-        $this->assertArrayHasKey('protection_policy', $config);
-        $this->assertArrayHasKey('guards_provider_manager', $config);
-        $this->assertArrayHasKey('guard_manager', $config);
-        $this->assertArrayHasKey('guards_provider', $config);
-        $this->assertArrayHasKey('messages_options', $config);
+        $this->assertSame(
+            [
+                'protection_policy'       => GuardInterface::POLICY_ALLOW,
+                'guards_provider_manager' => [],
+                'guard_manager'           => [],
+                'guards_provider'         => [],
+                'messages_options'        => [],
+            ],
+            (new ConfigProvider())()['dot_authorization']
+        );
     }
 }

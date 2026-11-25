@@ -14,7 +14,9 @@ use Psr\Container\NotFoundExceptionInterface;
 
 use function class_exists;
 use function is_array;
+use function is_int;
 use function is_string;
+use function sprintf;
 
 trait AttachAuthorizationEventListenersTrait
 {
@@ -24,24 +26,20 @@ trait AttachAuthorizationEventListenersTrait
      */
     protected function attachListeners(ContainerInterface $container, EventManagerInterface $eventManager): void
     {
-        /** @var RbacGuardOptions $options */
-        $options = $container->get(RbacGuardOptions::class);
-
-        if (! empty($options->getEventListeners())) {
-            $listeners = $options->getEventListeners();
-            foreach ($listeners as $listener) {
-                if (is_string($listener)) {
-                    $l = $this->getListenerObject($container, $listener);
-                    $p = 1;
-                    $l->attach($eventManager, $p);
-                } elseif (is_array($listener)) {
-                    $l = $listener['type'] ?? '';
-                    $p = $listener['priority'] ?? 1;
-
-                    $l = $this->getListenerObject($container, $l);
-                    $l->attach($eventManager, $p);
-                }
+        foreach ($this->getRbacGuardOptions($container)->getEventListeners() as $listener) {
+            $priority = 1;
+            if (is_array($listener)) {
+                $priority = is_int($listener['priority'] ?? null) ? $listener['priority'] : 1;
+                $listener = $listener['type'] ?? '';
             }
+
+            if (! is_string($listener)) {
+                throw new RuntimeException(
+                    'Authorization event listener must be a service name, a class name or an array with a "type" key'
+                );
+            }
+
+            $this->getListenerObject($container, $listener)->attach($eventManager, $priority);
         }
     }
 
@@ -53,19 +51,35 @@ trait AttachAuthorizationEventListenersTrait
         ContainerInterface $container,
         string $listener
     ): AuthorizationEventListenerInterface {
+        $object = null;
         if ($container->has($listener)) {
-            $listener = $container->get($listener);
+            $object = $container->get($listener);
+        } elseif (class_exists($listener)) {
+            $object = new $listener();
         }
 
-        if (is_string($listener) && class_exists($listener)) {
-            $listener = new $listener();
+        if (! $object instanceof AuthorizationEventListenerInterface) {
+            throw new RuntimeException(sprintf(
+                'Authorization event listener "%s" is not an instance of %s',
+                $listener,
+                AuthorizationEventListenerInterface::class
+            ));
         }
 
-        if (! $listener instanceof AuthorizationEventListenerInterface) {
-            throw new RuntimeException('Authorization event listener is not an instance of '
-                . AuthorizationEventListenerInterface::class);
+        return $object;
+    }
+
+    /**
+     * @throws ContainerExceptionInterface
+     * @throws NotFoundExceptionInterface
+     */
+    protected function getRbacGuardOptions(ContainerInterface $container): RbacGuardOptions
+    {
+        $options = $container->get(RbacGuardOptions::class);
+        if (! $options instanceof RbacGuardOptions) {
+            throw new RuntimeException(sprintf('Service %s is not configured', RbacGuardOptions::class));
         }
 
-        return $listener;
+        return $options;
     }
 }

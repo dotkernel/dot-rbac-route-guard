@@ -4,20 +4,22 @@ declare(strict_types=1);
 
 namespace Dot\Rbac\Route\Guard\Provider;
 
+use Dot\Rbac\Route\Guard\Exception\RuntimeException;
 use Dot\Rbac\Route\Guard\Guard\GuardInterface;
-use Psr\Container\ContainerExceptionInterface;
 
 use function is_array;
 use function usort;
 
 class ArrayGuardsProvider extends AbstractGuardsProvider
 {
+    /** @var array<array-key, mixed> */
     protected array $guardsConfig = [];
 
+    /** @var list<GuardInterface> */
     protected array $guards = [];
 
     /**
-     * @param array|null $options
+     * @param array<array-key, mixed>|null $options
      */
     public function __construct(?array $options = null)
     {
@@ -30,47 +32,46 @@ class ArrayGuardsProvider extends AbstractGuardsProvider
     }
 
     /**
-     * Gets the cached guard list or creates it from the config
+     * Returns the cached guards, or creates them from the config, sorted by priority (highest first).
      *
-     * @return GuardInterface[]
-     * @throws ContainerExceptionInterface
+     * @return list<GuardInterface>
      */
     public function getGuards(): array
     {
-        if ($this->guards) {
+        if ($this->guards !== [] || $this->guardsConfig === []) {
             return $this->guards;
         }
 
-        if (empty($this->guardsConfig)) {
-            return [];
-        }
-
-        $this->guards = [];
+        $guards = [];
         foreach ($this->guardsConfig as $guardConfig) {
-            $this->guards[] = $this->getGuardFactory()->create($guardConfig);
+            if (! is_array($guardConfig)) {
+                throw new RuntimeException('Each guard config must be an array with a "type" key');
+            }
+            $guards[] = $this->guardFactory->create($guardConfig);
         }
 
-        $this->sortGuardsByPriority();
-        return $this->guards;
+        usort(
+            $guards,
+            static fn (GuardInterface $a, GuardInterface $b): int => $b->getPriority() <=> $a->getPriority()
+        );
+
+        return $this->guards = $guards;
     }
 
     /**
-     * Sort the guards list internally
+     * @return array<array-key, mixed>
      */
-    protected function sortGuardsByPriority(): void
-    {
-        usort($this->guards, function (GuardInterface $a, GuardInterface $b) {
-            return $b->getPriority() - $a->getPriority();
-        });
-    }
-
     public function getGuardsConfig(): array
     {
         return $this->guardsConfig;
     }
 
+    /**
+     * @param array<array-key, mixed> $guardsConfig
+     */
     public function setGuardsConfig(array $guardsConfig): void
     {
         $this->guardsConfig = $guardsConfig;
+        $this->guards       = [];
     }
 }

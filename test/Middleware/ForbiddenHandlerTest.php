@@ -4,95 +4,108 @@ declare(strict_types=1);
 
 namespace DotTest\Rbac\Route\Guard\Middleware;
 
-use Dot\Authorization\AuthorizationInterface;
 use Dot\Authorization\Exception\ForbiddenException;
+use Dot\Rbac\Route\Guard\Event\AuthorizationEvent;
 use Dot\Rbac\Route\Guard\Middleware\ForbiddenHandler;
+use Dot\Rbac\Route\Guard\Options\MessagesOptions;
 use Dot\Rbac\Route\Guard\Options\RbacGuardOptions;
-use Exception;
+use DotTest\Rbac\Route\Guard\Fixture\AuthorizationService;
+use DotTest\Rbac\Route\Guard\Fixture\Request;
+use DotTest\Rbac\Route\Guard\Fixture\RequestHandler;
+use DotTest\Rbac\Route\Guard\Fixture\TemplateRenderer;
 use Laminas\Diactoros\Response\TextResponse;
-use Laminas\Diactoros\ServerRequest;
 use PHPUnit\Framework\TestCase;
-use Psr\Http\Message\ResponseInterface;
-use Psr\Http\Message\ServerRequestInterface;
-use Psr\Http\Server\RequestHandlerInterface;
+use RuntimeException;
 
 class ForbiddenHandlerTest extends TestCase
 {
-    protected AuthorizationInterface $mockAuthorizationInterface;
-    protected RbacGuardOptions $rbacGuardsOptions;
-    protected ForbiddenHandler $subject;
-
-    public function setUp(): void
+    private function handler(?TemplateRenderer $renderer = null): ForbiddenHandler
     {
-        $this->mockAuthorizationInterface = new class implements AuthorizationInterface {
-            public function isGranted(string $permission, array $roles = [], mixed $context = null): bool
-            {
-                return true;
-            }
-        };
-
-        $this->rbacGuardsOptions = new RbacGuardOptions(null);
-
-        $this->subject = new ForbiddenHandler($this->mockAuthorizationInterface, $this->rbacGuardsOptions);
+        return new ForbiddenHandler(new AuthorizationService(), new RbacGuardOptions(), $renderer, 'app::403');
     }
 
-    /**
-     * @throws Exception
-     */
-    public function testProcessForbiddenException(): void
+    private function throwing(string $message = 'Not allowed'): RequestHandler
     {
-        $request = new ServerRequest();
-        $handler = new class implements RequestHandlerInterface {
-            public function handle(ServerRequestInterface $request): ResponseInterface
-            {
-                throw new ForbiddenException('ForbiddenException');
-            }
-        };
-
-        $this->expectException(ForbiddenException::class);
-        $this->expectExceptionMessage('ForbiddenException');
-        $this->subject->process($request, $handler);
+        return new RequestHandler(static fn () => throw new ForbiddenException($message));
     }
 
-    /**
-     * @throws Exception
-     */
-    public function testProcessException(): void
+    public function testPassesResponseThrough(): void
     {
-        $request = new ServerRequest();
-        $handler = new class implements RequestHandlerInterface {
-            public function handle(ServerRequestInterface $request): ResponseInterface
-            {
-                throw new Exception('Exception');
-            }
-        };
-
-        $this->expectException(Exception::class);
-        $this->expectExceptionMessage('Exception');
-        $this->subject->process($request, $handler);
+        $response = $this->handler()->process(Request::withoutRoute(), new RequestHandler());
+        $this->assertSame('handled', (string) $response->getBody());
     }
 
-    /**
-     * @throws Exception
-     */
-    public function testProcess(): void
+    public function testOtherExceptionsAreNotHandled(): void
     {
-        $request = new ServerRequest();
-        $handler = new class implements RequestHandlerInterface {
-            public function handle(ServerRequestInterface $request): ResponseInterface
-            {
-                return new TextResponse('All good');
-            }
-        };
+        $handler = new RequestHandler(static fn () => throw new RuntimeException('upstream said 403', 403));
 
-        $result = $this->subject->process($request, $handler);
-        $this->assertContainsOnlyInstancesOf(ResponseInterface::class, [$result]);
+        $this->expectException(RuntimeException::class);
+        $this->expectExceptionMessage('upstream said 403');
+        $this->handler(new TemplateRenderer())->process(Request::withoutRoute(), $handler);
     }
 
-    public function testIsDebug(): void
+    public function testWithoutRendererRethrowsWithPreviousException(): void
     {
-        $this->subject->setDebug(true);
-        $result = $this->subject->isDebug();
-        $this->assertTrue($result);
+        try {
+            $this->handler()->process(Request::withoutRoute(), $this->throwing());
+            $this->fail('A ForbiddenException was expected');
+        } catch (ForbiddenException $e) {
+            $this->assertSame('Not allowed', $e->getMessage());
+            $this->assertSame(403, $e->getCode());
+            $this->assertInstanceOf(ForbiddenException::class, $e->getPrevious());
+        }
+    }
+
+    public function testRendersTemplateWith403(): void
+    {
+        $renderer = new TemplateRenderer();
+
+        $response = $this->handler($renderer)->process(Request::withoutRoute(), $this->throwing());
+
+        $this->assertSame(403, $response->getStatusCode());
+        $this->assertSame('rendered:app::403', (string) $response->getBody());
+        $this->assertIsArray($renderer->lastParams);
+        $this->assertSame('Not allowed', $renderer->lastParams['message']);
+        $this->assertSame(403, $renderer->lastParams['status']);
+        $this->assertArrayNotHasKey('error', $renderer->lastParams);
+    }
+
+    public function testEmptyMessageUsesConfiguredMessage(): void
+    {
+        $renderer = new TemplateRenderer();
+
+        $this->handler($renderer)->process(Request::withoutRoute(), $this->throwing(''));
+
+        $this->assertIsArray($renderer->lastParams);
+        $this->assertSame(
+            (new MessagesOptions())->getMessage(MessagesOptions::FORBIDDEN),
+            $renderer->lastParams['message']
+        );
+    }
+
+    public function testDebugAddsTheError(): void
+    {
+        $renderer = new TemplateRenderer();
+        $subject  = $this->handler($renderer);
+        $subject->setDebug(true);
+
+        $subject->process(Request::withoutRoute(), $this->throwing());
+
+        $this->assertTrue($subject->isDebug());
+        $this->assertIsArray($renderer->lastParams);
+        $this->assertInstanceOf(ForbiddenException::class, $renderer->lastParams['error']);
+    }
+
+    public function testListenerResponseIsReturned(): void
+    {
+        $subject = $this->handler();
+        $subject->getEventManager()->attach(
+            AuthorizationEvent::EVENT_FORBIDDEN,
+            static fn (): TextResponse => new TextResponse('redirect', 302)
+        );
+
+        $response = $subject->process(Request::withoutRoute(), $this->throwing());
+
+        $this->assertSame(302, $response->getStatusCode());
     }
 }

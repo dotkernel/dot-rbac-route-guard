@@ -6,13 +6,16 @@ namespace Dot\Rbac\Route\Guard\Factory;
 
 use Dot\Authentication\AuthenticationInterface;
 use Dot\Authorization\AuthorizationInterface;
+use Dot\Rbac\Route\Guard\Exception\RuntimeException;
 use Dot\Rbac\Route\Guard\Middleware\RbacGuardMiddleware;
-use Dot\Rbac\Route\Guard\Options\RbacGuardOptions;
 use Dot\Rbac\Route\Guard\Provider\Factory;
 use Dot\Rbac\Route\Guard\Provider\GuardsProviderPluginManager;
 use Psr\Container\ContainerExceptionInterface;
 use Psr\Container\ContainerInterface;
 use Psr\Container\NotFoundExceptionInterface;
+
+use function is_a;
+use function sprintf;
 
 class RbacGuardMiddlewareFactory
 {
@@ -22,22 +25,39 @@ class RbacGuardMiddlewareFactory
      * @throws ContainerExceptionInterface
      * @throws NotFoundExceptionInterface
      */
-    public function __invoke(ContainerInterface $container, string $requestedName): RbacGuardMiddleware
-    {
-        /** @var RbacGuardOptions $options */
-        $options = $container->get(RbacGuardOptions::class);
+    public function __invoke(
+        ContainerInterface $container,
+        string $requestedName = RbacGuardMiddleware::class
+    ): RbacGuardMiddleware {
+        if (! is_a($requestedName, RbacGuardMiddleware::class, true)) {
+            throw new RuntimeException(sprintf('%s can only create %s', self::class, RbacGuardMiddleware::class));
+        }
 
-        $guardsProviderFactory = new Factory($container, $container->get(GuardsProviderPluginManager::class));
+        $options = $this->getRbacGuardOptions($container);
+
+        $pluginManager         = $container->has(GuardsProviderPluginManager::class)
+            ? $container->get(GuardsProviderPluginManager::class)
+            : null;
+        $guardsProviderFactory = new Factory(
+            $container,
+            $pluginManager instanceof GuardsProviderPluginManager ? $pluginManager : null
+        );
         $guardsProvider        = $guardsProviderFactory->create($options->getGuardsProvider());
 
-        /** @var RbacGuardMiddleware $middleware */
+        $authorizationService = $container->get(AuthorizationInterface::class);
+        if (! $authorizationService instanceof AuthorizationInterface) {
+            throw new RuntimeException(sprintf('Service %s is not configured', AuthorizationInterface::class));
+        }
+
+        $authentication = $container->has(AuthenticationInterface::class)
+            ? $container->get(AuthenticationInterface::class)
+            : null;
+
         $middleware = new $requestedName(
-            $container->get(AuthorizationInterface::class),
+            $authorizationService,
             $guardsProvider,
             $options,
-            $container->has(AuthenticationInterface::class)
-                ? $container->get(AuthenticationInterface::class)
-                : null
+            $authentication instanceof AuthenticationInterface ? $authentication : null
         );
 
         $middleware->attach($middleware->getEventManager(), 1000);

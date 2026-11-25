@@ -6,26 +6,20 @@ namespace Dot\Rbac\Route\Guard\Guard;
 
 use Dot\Rbac\Route\Guard\Factory\GuardFactory;
 use Dot\Rbac\Route\Guard\Factory\PermissionGuardFactory;
-use Laminas\ServiceManager\AbstractPluginManager;
-use Laminas\ServiceManager\Exception\InvalidServiceException;
-
-use function gettype;
-use function is_object;
-use function sprintf;
+use Dot\Rbac\Route\Guard\Plugin\AbstractPluginManager;
 
 /**
- * @template T
- * @extends AbstractPluginManager<T>
+ * @extends AbstractPluginManager<GuardInterface>
  */
 class GuardPluginManager extends AbstractPluginManager
 {
-    protected string $instanceOf = GuardInterface::class;
-
+    /** @var array<string, string|callable> */
     protected array $factories = [
         RouteGuard::class           => GuardFactory::class,
         RoutePermissionGuard::class => PermissionGuardFactory::class,
     ];
 
+    /** @var array<string, string> */
     protected array $aliases = [
         'routeguard'           => RouteGuard::class,
         'routeGuard'           => RouteGuard::class,
@@ -40,15 +34,8 @@ class GuardPluginManager extends AbstractPluginManager
         'RoutePermission'      => RoutePermissionGuard::class,
     ];
 
-    public function validate(mixed $instance): void
+    protected function getInstanceOf(): string
     {
-        if (! $instance instanceof $this->instanceOf) {
-            throw new InvalidServiceException(sprintf(
-                '%s can only create instances of %s; %s is invalid',
-                static::class,
-                $this->instanceOf,
-                is_object($instance) ? $instance::class : gettype($instance)
-            ));
-        }
+        return GuardInterface::class;
     }
 }

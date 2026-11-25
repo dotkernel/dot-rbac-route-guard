@@ -9,22 +9,28 @@ use PHPUnit\Framework\TestCase;
 
 class MessagesOptionsTest extends TestCase
 {
-    protected MessagesOptions $subject;
-
-    public function setUp(): void
+    public function testDefaultMessages(): void
     {
-        $this->subject = new MessagesOptions();
+        $subject = new MessagesOptions();
+
+        $this->assertSame(
+            'You must sign in first in order to access the requested content',
+            $subject->getMessage(MessagesOptions::UNAUTHORIZED)
+        );
+        $this->assertSame(
+            'You don\'t have enough permissions to access the requested content',
+            $subject->getMessage(MessagesOptions::FORBIDDEN)
+        );
+        $this->assertSame('', $subject->getMessage(1000));
     }
 
-    public function testGetMessages(): void
+    public function testSetMessagesReplacesByKeyAndIgnoresInvalidEntries(): void
     {
-        $this->subject->setMessages(['testMessage']);
-        $this->assertCount(2, $this->subject->getMessages());
-    }
+        $subject = new MessagesOptions([
+            'messages' => [MessagesOptions::FORBIDDEN => 'No access', 'text' => 'ignored', 5 => ['ignored']],
+        ]);
 
-    public function testGetMessage(): void
-    {
-        $this->assertEmpty($this->subject->getMessage(1000));
-        $this->assertIsString($this->subject->getMessage(MessagesOptions::UNAUTHORIZED));
+        $this->assertSame('No access', $subject->getMessage(MessagesOptions::FORBIDDEN));
+        $this->assertCount(2, $subject->getMessages());
     }
 }
